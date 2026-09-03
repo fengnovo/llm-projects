@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent 任务助手 Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .app {
+            width: 100%;
+            max-width: 1000px;
+            height: 90vh;
+            background: #1e293b;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            display: flex;
+            overflow: hidden;
+        }
+        /* 左侧工具面板 */
+        .sidebar {
+            width: 260px;
+            background: #0f172a;
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #334155;
+        }
+        .sidebar-header h2 {
+            font-size: 16px;
+            color: #f1f5f9;
+            margin-bottom: 4px;
+        }
+        .sidebar-header p {
+            font-size: 12px;
+            color: #64748b;
+        }
+        .tools-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .tool-item {
+            padding: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+        .tool-item .icon {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+        .tool-item h4 {
+            font-size: 13px;
+            color: #e2e8f0;
+            margin-bottom: 4px;
+        }
+        .tool-item p {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.4;
+        }
+
+        /* 右侧主区域 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #334155;
+            background: #1e293b;
+        }
+        .header h1 {
+            font-size: 18px;
+            color: #f1f5f9;
+        }
+        .header .subtitle {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            max-width: 85%;
+        }
+        .message.user { margin-left: auto; }
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            font-size: 14px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .message.user .message-bubble {
+            background: #3b82f6;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .message.assistant .message-bubble {
+            background: #334155;
+            color: #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* 步骤卡片 */
+        .step-card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .step-header {
+            padding: 8px 12px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            font-size: 12px;
+            font-weight: 600;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step-header .step-num {
+            background: #3b82f6;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+        .step-header .step-type {
+            color: #64748b;
+        }
+        .step-body {
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .step-body .tool-name {
+            color: #22d3ee;
+            font-weight: 600;
+        }
+        .step-body .tool-args {
+            color: #fbbf24;
+            font-family: monospace;
+        }
+        .step-body .tool-result {
+            color: #4ade80;
+            margin-top: 6px;
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
+            background: #0c1222;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        /* 输入区 */
+        .input-area {
+            padding: 16px 20px;
+            border-top: 1px solid #334155;
+            background: #1e293b;
+            display: flex;
+            gap: 12px;
+        }
+        .input-area textarea {
+            flex: 1;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            resize: none;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-area textarea:focus { border-color: #3b82f6; }
+        .input-area textarea::placeholder { color: #64748b; }
+        .input-area button {
+            padding: 0 24px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .input-area button:hover { background: #2563eb; }
+        .input-area button:disabled { background: #475569; cursor: not-allowed; }
+
+        .empty-state {
+            text-align: center;
+            color: #64748b;
+            padding: 80px 20px;
+        }
+        .empty-state .icon { font-size: 56px; margin-bottom: 16px; }
+        .empty-state h3 { color: #94a3b8; margin-bottom: 8px; font-size: 18px; }
+        .empty-state p { font-size: 13px; }
+
+        .examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+            justify-content: center;
+        }
+        .example-btn {
+            padding: 6px 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .example-btn:hover {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 4px 0;
+        }
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #475569;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- 左侧工具列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🛠️ 可用工具</h2>
+                <p>Agent 会自主选择使用</p>
+            </div>
+            <div class="tools-list" id="toolsList"></div>
+        </div>
+
+        <!-- 右侧主区域 -->
+        <div class="main">
+            <div class="header">
+                <h1>🤖 Agent 任务助手</h1>
+                <div class="subtitle">基于 LangGraph 的 ReAct Agent · 思考 → 行动 → 观察 → 回答</div>
+            </div>
+
+            <div class="chat-area" id="chatArea">
+                <div class="empty-state">
+                    <div class="icon">🧠</div>
+                    <h3>试试让 Agent 帮你完成任务</h3>
+                    <p>它会自主思考、调用工具、一步步解决问题</p>
+                    <div class="examples">
+                        <span class="example-btn" onclick="setExample('计算 1234 * 5678 的结果是多少？')">🔢 数学计算</span>
+                        <span class="example-btn" onclick="setExample('现在几点了？今天星期几？')">⏰ 查时间</span>
+                        <span class="example-btn" onclick="setExample('帮我搜索一下 LangChain 是什么')">🔍 联网搜索</span>
+                        <span class="example-btn" onclick="setExample('把 Hello World 翻译成中文')">🌐 翻译</span>
+                        <span class="example-btn" onclick="setExample('用 Python 写一个斐波那契数列函数并运行测试')">💻 代码执行</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <textarea id="queryInput" rows="1" placeholder="输入你的问题或任务...（Enter 发送，Shift+Enter 换行）"></textarea>
+                <button id="runBtn" onclick="runAgent()">执行</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8002';
+        let isLoading = false;
+
+        // 初始化
+        async function init() {
+            await loadTools();
+        }
+
+        // 加载工具列表
+        async function loadTools() {
+            try {
+                const res = await fetch(`${API_BASE}/api/agent/tools`);
+                const data = await res.json();
+                const icons = {
+                    'calculator': '🔢',
+                    'web_search': '🔍',
+                    'get_current_time': '⏰',
+                    'code_executor': '💻',
+                    'translate': '🌐',
+                };
+                document.getElementById('toolsList').innerHTML = data.tools.map(t => `
+                    <div class="tool-item">
+                        <div class="icon">${icons[t.name] || '🔧'}</div>
+                        <h4>${t.name}</h4>
+                        <p>${t.description}</p>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('加载工具失败:', e);
+            }
+        }
+
+        function setExample(text) {
+            document.getElementById('queryInput').value = text;
+            document.getElementById('queryInput').focus();
+        }
+
+        async function runAgent() {
+            const input = document.getElementById('queryInput');
+            const query = input.value.trim();
+
+            if (!query || isLoading) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+
+            // 移除空状态
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            // 添加用户消息
+            addMessage('user', query);
+
+            // 添加加载状态
+            const loadingId = addLoadingMessage();
+            isLoading = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/agent/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '请求失败');
+                }
+
+                const data = await res.json();
+                removeLoadingMessage(loadingId);
+
+                // 显示执行步骤和最终答案
+                addAgentResponse(data);
+
+            } catch (e) {
+                removeLoadingMessage(loadingId);
+                addMessage('assistant', `[出错了] ${e.message}`);
+            }
+
+            isLoading = false;
+        }
+
+        function addMessage(role, content) {
+            const container = document.getElementById('chatArea');
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            div.innerHTML = `<div class="message-bubble">${escapeHtml(content)}</div>`;
+            container.appendChild(div);
+            scrollToBottom();
+            return div;
+        }
+
+        function addAgentResponse(data) {
+            const container = document.getElementById('chatArea');
+            const div = document.createElement('div');
+            div.className = 'message assistant';
+
+            let stepsHtml = '';
+            if (data.steps && data.steps.length > 0) {
+                stepsHtml = data.steps.map(step => `
+                    <div class="step-card">
+                        <div class="step-header">
+                            <span class="step-num">步骤 ${step.step}</span>
+                            <span class="step-type">调用工具</span>
+                        </div>
+                        <div class="step-body">
+                            <div><span class="tool-name">${step.tool_name}</span></div>
+                            <div class="tool-args">${escapeHtml(JSON.stringify(step.tool_args, null, 2))}</div>
+                            <div class="tool-result">${escapeHtml(JSON.stringify(step.result, null, 2))}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            div.innerHTML = `
+                <div class="message-bubble">
+                    ${escapeHtml(data.answer)}
+                    ${stepsHtml}
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #475569; font-size: 11px; color: #64748b;">
+                        共执行 ${data.total_steps} 步
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            scrollToBottom();
+            return div;
+        }
+
+        function addLoadingMessage() {
+            const container = document.getElementById('chatArea');
+            const id = 'loading-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'message assistant';
+            div.innerHTML = `
+                <div class="message-bubble">
+                    <div style="margin-bottom: 8px; font-size: 13px; color: #94a3b8;">Agent 思考中...</div>
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeLoadingMessage(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatArea');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 输入框自适应 + 快捷键
+        document.getElementById('queryInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        document.getElementById('queryInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                runAgent();
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多模态内容推荐 Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #fdf2f8;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            padding: 30px 0;
+        }
+        .header h1 {
+            font-size: 28px;
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        .stats-bar {
+            background: #fff;
+            border-radius: 16px;
+            padding: 16px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-item .label { font-size: 12px; color: #9ca3af; }
+        .stat-item .value { font-size: 20px; font-weight: 600; color: #ec4899; }
+
+        .controls {
+            background: #fff;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #f3f4f6;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #6b7280;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: #ec4899;
+            border-bottom-color: #ec4899;
+            font-weight: 500;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #f3f4f6;
+            border-radius: 12px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus { border-color: #ec4899; }
+        .search-box button {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .search-box button:hover { transform: translateY(-1px); }
+        .search-box button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .upload-zone {
+            border: 2px dashed #f472b6;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fdf2f8;
+        }
+        .upload-zone:hover {
+            background: #fce7f3;
+            border-color: #ec4899;
+        }
+        .upload-zone .icon { font-size: 40px; margin-bottom: 10px; }
+        .upload-zone p { color: #6b7280; font-size: 14px; }
+
+        .upload-section {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .upload-section label {
+            padding: 10px 20px;
+            background: #f3f4f6;
+            color: #374151;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .upload-section label:hover { background: #e5e7eb; }
+        .upload-section input[type="file"] { display: none; }
+        .upload-section .file-count { font-size: 13px; color: #6b7280; align-self: center; }
+        .upload-section button {
+            padding: 10px 20px;
+            background: #10b981;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .upload-section button:disabled { background: #9ca3af; cursor: not-allowed; }
+
+        .results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .result-card {
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .result-card:hover { transform: translateY(-4px); }
+        .result-image {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            background: #f3f4f6;
+        }
+        .result-info {
+            padding: 10px 12px;
+        }
+        .result-score {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+        .score-bar {
+            flex: 1;
+            height: 6px;
+            background: #f3f4f6;
+            border-radius: 3px;
+            margin: 0 8px;
+            overflow: hidden;
+        }
+        .score-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ec4899, #8b5cf6);
+            border-radius: 3px;
+        }
+        .score-value {
+            color: #ec4899;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right;
+        }
+        .result-filename {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .empty-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+        .empty-results .icon { font-size: 48px; margin-bottom: 12px; }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #9ca3af;
+        }
+        .spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #f3f4f6;
+            border-top-color: #ec4899;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .sample-queries {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .sample-tag {
+            padding: 6px 12px;
+            background: #fce7f3;
+            color: #be185d;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .sample-tag:hover { background: #fbcfe8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 多模态内容推荐系统</h1>
+            <p>基于 CLIP + Qdrant · 文本搜图 · 以图搜图 · 混合检索</p>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="label">图片数量</span>
+                <span class="value" id="imageCount">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">向量维度</span>
+                <span class="value" id="vectorDim">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">模型</span>
+                <span class="value" style="font-size:14px;" id="modelName">-</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="tabs">
+                <div class="tab active" data-tab="text" onclick="switchTab('text')">🔍 文本搜图</div>
+                <div class="tab" data-tab="image" onclick="switchTab('image')">🖼️ 以图搜图</div>
+                <div class="tab" data-tab="upload" onclick="switchTab('upload')">📤 上传图片</div>
+            </div>
+
+            <!-- 文本搜图 -->
+            <div class="tab-content active" id="tab-text">
+                <div class="search-box">
+                    <input type="text" id="textQuery" placeholder="输入描述，比如：一只可爱的猫咪、海边日落、穿红色衣服的女孩...">
+                    <button onclick="searchByText()">搜索</button>
+                </div>
+                <div class="sample-queries">
+                    <span class="sample-tag" onclick="setQuery('可爱的猫咪')">🐱 可爱的猫咪</span>
+                    <span class="sample-tag" onclick="setQuery('美丽的风景')">🏞️ 美丽的风景</span>
+                    <span class="sample-tag" onclick="setQuery('美食')">🍜 美食</span>
+                    <span class="sample-tag" onclick="setQuery('城市夜景')">🌃 城市夜景</span>
+                    <span class="sample-tag" onclick="setQuery('鲜花')">🌸 鲜花</span>
+                </div>
+            </div>
+
+            <!-- 以图搜图 -->
+            <div class="tab-content" id="tab-image">
+                <div class="upload-zone" onclick="document.getElementById('searchImageInput').click()">
+                    <div class="icon">🔍</div>
+                    <p>点击或拖拽图片到这里，搜索相似图片</p>
+                </div>
+                <input type="file" id="searchImageInput" accept="image/*" style="display:none;" onchange="handleImageSearch(event)">
+            </div>
+
+            <!-- 上传图片 -->
+            <div class="tab-content" id="tab-upload">
+                <div class="upload-zone" onclick="document.getElementById('uploadInput').click()">
+                    <div class="icon">📤</div>
+                    <p>点击选择图片上传到内容库</p>
+                </div>
+                <input type="file" id="uploadInput" multiple accept="image/*" style="display:none;" onchange="handleUploadSelect(event)">
+                <div class="upload-section">
+                    <label>
+                        选择图片
+                        <input type="file" multiple accept="image/*" onchange="handleUploadSelect(event)">
+                    </label>
+                    <span class="file-count" id="uploadCount">未选择文件</span>
+                    <button id="uploadBtn" onclick="uploadImages()" disabled>上传到内容库</button>
+                    <button style="background:#ef4444; margin-left:auto;" onclick="clearLibrary()">清空</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <div class="empty-results">
+                <div class="icon">🖼️</div>
+                <p>还没有内容，先上传一些图片试试吧</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8003';
+        let selectedFiles = [];
+
+        // 初始化
+        async function init() {
+            await loadStats();
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_BASE}/api/multimodal/stats`);
+                const data = await res.json();
+                document.getElementById('imageCount').textContent = data.points_count || 0;
+            } catch (e) {
+                console.error('加载统计失败:', e);
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            // 按 data-tab 定位，不依赖全局 event（异步回调中 event 为 undefined）
+            const tabEl = document.querySelector('.tab[data-tab="' + tab + '"]');
+            if (tabEl) tabEl.classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+        }
+
+        function setQuery(q) {
+            document.getElementById('textQuery').value = q;
+            searchByText();
+        }
+
+        // 文本搜图
+        async function searchByText() {
+            const query = document.getElementById('textQuery').value.trim();
+            if (!query) return;
+
+            showLoading();
+
+            try {
+                const res = await fetch(`${API_BASE}/api/multimodal/search/text`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, top_k: 12 })
+                });
+                const data = await res.json();
+                renderResults(data.results);
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+
+        // 以图搜图
+        function handleImageSearch(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            searchByImage(file);
+        }
+
+        async function searchByImage(file) {
+            showLoading();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/multimodal/search/image?top_k=12`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                renderResults(data.results);
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+
+        // 上传
+        function handleUploadSelect(e) {
+            selectedFiles = Array.from(e.target.files);
+            document.getElementById('uploadCount').textContent = `已选择 ${selectedFiles.length} 张图片`;
+            document.getElementById('uploadBtn').disabled = selectedFiles.length === 0;
+        }
+
+        async function uploadImages() {
+            if (selectedFiles.length === 0) return;
+
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.textContent = '上传中...';
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            try {
+                const res = await fetch(`${API_BASE}/api/multimodal/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert(`成功上传 ${data.success} 张图片`);
+                    selectedFiles = [];
+                    document.getElementById('uploadCount').textContent = '未选择文件';
+                    await loadStats();
+                    // 切换到文本搜图
+                    switchTab('text');
+                } else {
+                    alert('上传失败');
+                }
+            } catch (e) {
+                alert('上传失败: ' + e.message);
+            }
+
+            btn.disabled = false;
+            btn.textContent = '上传到内容库';
+        }
+
+        async function clearLibrary() {
+            if (!confirm('确定要清空所有图片吗？')) return;
+            try {
+                await fetch(`${API_BASE}/api/multimodal/clear`, { method: 'DELETE' });
+                alert('已清空');
+                await loadStats();
+                document.getElementById('results').innerHTML = '<div class="empty-results"><div class="icon">🖼️</div><p>内容库已清空</p></div>';
+            } catch (e) {
+                alert('清空失败: ' + e.message);
+            }
+        }
+
+        // 渲染结果
+        function renderResults(results) {
+            const container = document.getElementById('results');
+
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div class="empty-results"><div class="icon">😕</div><p>没有找到相关图片</p></div>';
+                return;
+            }
+
+            container.innerHTML = results.map(item => {
+                const score = Math.max(0, Math.min(1, item.score));
+                const scorePercent = Math.round(score * 100);
+                const url = item.payload?.url || '';
+                const filename = item.payload?.filename || item.payload?.original_filename || 'image';
+
+                return `
+                    <div class="result-card">
+                        <img class="result-image" src="${API_BASE}${url}" alt="${filename}" onerror="this.style.background='#f3f4f6'">
+                        <div class="result-info">
+                            <div class="result-score">
+                                <span style="font-size:11px;color:#9ca3af;">相似度</span>
+                                <div class="score-bar"><div class="score-fill" style="width:${scorePercent}%"></div></div>
+                                <span class="score-value">${scorePercent}%</span>
+                            </div>
+                            <div class="result-filename">${filename}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showLoading() {
+            document.getElementById('results').innerHTML = `
+                <div class="loading" style="grid-column: 1 / -1;">
+                    <div class="spinner"></div>
+                    <p style="margin-top:12px;">正在检索...</p>
+                </div>
+            `;
+        }
+
+        function showError(msg) {
+            document.getElementById('results').innerHTML = `
+                <div class="empty-results" style="grid-column: 1 / -1;">
+                    <div class="icon">❌</div>
+                    <p>出错了：${msg}</p>
+                </div>
+            `;
+        }
+
+        // 拖拽上传
+        const uploadZone = document.querySelector('.upload-zone');
+        if (uploadZone) {
+            uploadZone.addEventListener('dragover', e => {
+                e.preventDefault();
+                uploadZone.style.background = '#fbcfe8';
+            });
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.style.background = '';
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

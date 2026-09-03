@@ -1,0 +1,55 @@
+# === Python / 虚拟环境 ===
+**/venv/
+**/.venv/
+**/env/
+*.pyc
+*.pyo
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# === 环境变量 & 本地配置 ===
+.env
+.env.local
+.env.*.local
+config.local.py
+.venv*
+
+# === 向量数据库 & 本地数据目录 ===
+# 03 ChromaDB
+**/data/chroma/
+**/chroma/
+# 05 Qdrant local storage
+**/data/qdrant/
+**/qdrant_storage/
+**/.qdrant/
+# 02 SQLite
+**/data/*.db
+**/*.sqlite3
+!**/data/.gitkeep
+
+# === 上传产物 / 临时文件 ===
+**/uploads/
+**/tmp/
+**/temp/
+
+# === Node / 前端构建 ===
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+.parcel-cache/
+.vite/
+
+# === macOS / IDE ===
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

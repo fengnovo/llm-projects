@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型网关监控面板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card { transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .status-ok { color: #10b981; }
+        .status-warn { color: #f59e0b; }
+        .status-error { color: #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航 -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                    <h1 class="text-xl font-bold">模型网关监控面板</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="flex items-center text-sm">
+                        <span class="w-2 h-2 bg-green-400 rounded-full mr-2 pulse-dot"></span>
+                        实时监控中
+                    </span>
+                    <span id="currentTime" class="text-sm opacity-80"></span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <!-- 状态概览 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="card bg-white rounded-xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">网关状态</p>
+                        <p id="gatewayStatus" class="text-2xl font-bold mt-1">检查中...</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-white rounded-xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">今日请求数</p>
+                        <p id="totalRequests" class="text-2xl font-bold mt-1">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-white rounded-xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">今日 Token 用量</p>
+                        <p id="totalTokens" class="text-2xl font-bold mt-1">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-white rounded-xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">成功率</p>
+                        <p id="successRate" class="text-2xl font-bold mt-1">--</p>
+                    </div>
+                    <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="card bg-white rounded-xl p-5 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-4">Token 用量趋势（最近 24 小时）</h3>
+                <canvas id="tokenChart" height="200"></canvas>
+            </div>
+            <div class="card bg-white rounded-xl p-5 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-4">各模型请求占比</h3>
+                <canvas id="modelChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- 模型列表 -->
+        <div class="card bg-white rounded-xl p-5 shadow-sm mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-800">模型状态</h3>
+                <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+                    刷新数据
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-gray-500 text-sm border-b">
+                            <th class="pb-3 font-medium">模型名称</th>
+                            <th class="pb-3 font-medium">状态</th>
+                            <th class="pb-3 font-medium">今日请求</th>
+                            <th class="pb-3 font-medium">今日 Token</th>
+                            <th class="pb-3 font-medium">类型</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modelTable">
+                        <!-- 动态填充 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 灰度发布控制 -->
+        <div class="card bg-white rounded-xl p-5 shadow-sm mb-6">
+            <h3 class="font-semibold text-gray-800 mb-4">灰度发布控制</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">选择模型</label>
+                    <select id="canaryModel" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="chat-default">chat-default</option>
+                        <option value="chat-pro">chat-pro</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">灰度比例: <span id="canaryValue">20</span>%</label>
+                    <input type="range" id="canarySlider" min="0" max="100" value="20" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+            <div class="flex items-center mt-4 space-x-4">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" id="canaryEnabled" class="w-4 h-4 text-blue-600 rounded">
+                    <span class="text-sm text-gray-700">启用灰度发布</span>
+                </label>
+                <button onclick="applyCanary()" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition">
+                    应用配置
+                </button>
+            </div>
+        </div>
+
+        <!-- 快速测试 -->
+        <div class="card bg-white rounded-xl p-5 shadow-sm">
+            <h3 class="font-semibold text-gray-800 mb-4">快速测试</h3>
+            <div class="flex space-x-2 mb-4">
+                <input type="text" id="testInput" placeholder="输入测试消息..." class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <select id="testModel" class="px-3 py-2 border border-gray-300 rounded-lg">
+                    <option value="chat-default">chat-default</option>
+                    <option value="chat-pro">chat-pro</option>
+                    <option value="chat-local">chat-local</option>
+                </select>
+                <button onclick="sendTest()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    发送
+                </button>
+            </div>
+            <div id="testResult" class="bg-gray-50 rounded-lg p-4 min-h-[100px] text-sm text-gray-700">
+                测试结果将显示在这里...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 配置
+        const MIDDLEWARE_URL = 'http://localhost:5000';
+        const GATEWAY_URL = 'http://localhost:4000';
+
+        // 更新时间
+        function updateTime() {
+            document.getElementById('currentTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // 模拟数据（实际项目中从 API 获取）
+        let mockData = {
+            requests: 1247,
+            tokens: 458230,
+            successRate: 99.2,
+            models: [
+                { name: 'gpt-4o-mini', status: 'ok', requests: 856, tokens: 312000, type: '云端' },
+                { name: 'gpt-4o', status: 'ok', requests: 132, tokens: 89000, type: '云端' },
+                { name: 'qwen-turbo', status: 'ok', requests: 210, tokens: 45000, type: '云端' },
+                { name: 'deepseek-chat', status: 'ok', requests: 45, tokens: 10230, type: '云端' },
+                { name: 'qwen2.5-7b-local', status: 'warn', requests: 4, tokens: 2000, type: '私有化(vLLM)' },
+                { name: 'llama3.2-3b-ollama', status: 'error', requests: 0, tokens: 0, type: '私有化(Ollama)' },
+            ]
+        };
+
+        // 初始化图表
+        let tokenChart, modelChart;
+
+        function initCharts() {
+            // Token 趋势图
+            const tokenCtx = document.getElementById('tokenChart').getContext('2d');
+            const hours = [];
+            const tokenData = [];
+            for (let i = 23; i >= 0; i--) {
+                const h = new Date();
+                h.setHours(h.getHours() - i);
+                hours.push(h.getHours() + ':00');
+                tokenData.push(Math.floor(Math.random() * 30000) + 10000);
+            }
+            tokenChart = new Chart(tokenCtx, {
+                type: 'line',
+                data: {
+                    labels: hours,
+                    datasets: [{
+                        label: 'Token 用量',
+                        data: tokenData,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // 模型占比图
+            const modelCtx = document.getElementById('modelChart').getContext('2d');
+            modelChart = new Chart(modelCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: mockData.models.filter(m => m.requests > 0).map(m => m.name),
+                    datasets: [{
+                        data: mockData.models.filter(m => m.requests > 0).map(m => m.requests),
+                        backgroundColor: [
+                            '#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        }
+
+        // 渲染模型表格
+        function renderModelTable() {
+            const tbody = document.getElementById('modelTable');
+            tbody.innerHTML = mockData.models.map(m => `
+                <tr class="border-b last:border-b-0">
+                    <td class="py-3 font-medium">${m.name}</td>
+                    <td class="py-3">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            ${m.status === 'ok' ? 'bg-green-100 text-green-800' :
+                              m.status === 'warn' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'}">
+                            ${m.status === 'ok' ? '正常' : m.status === 'warn' ? '降级中' : '离线'}
+                        </span>
+                    </td>
+                    <td class="py-3 text-gray-600">${m.requests.toLocaleString()}</td>
+                    <td class="py-3 text-gray-600">${m.tokens.toLocaleString()}</td>
+                    <td class="py-3 text-gray-500 text-sm">${m.type}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 更新统计数据
+        function updateStats() {
+            document.getElementById('totalRequests').textContent = mockData.requests.toLocaleString();
+            document.getElementById('totalTokens').textContent = (mockData.tokens / 1000).toFixed(1) + 'K';
+            document.getElementById('successRate').textContent = mockData.successRate + '%';
+        }
+
+        // 检查网关状态
+        async function checkGatewayStatus() {
+            try {
+                const res = await fetch(GATEWAY_URL + '/health');
+                if (res.ok) {
+                    document.getElementById('gatewayStatus').textContent = '运行中';
+                    document.getElementById('gatewayStatus').className = 'text-2xl font-bold mt-1 text-green-600';
+                } else {
+                    throw new Error('not ok');
+                }
+            } catch (e) {
+                document.getElementById('gatewayStatus').textContent = '离线';
+                document.getElementById('gatewayStatus').className = 'text-2xl font-bold mt-1 text-red-600';
+            }
+        }
+
+        // 灰度滑块
+        document.getElementById('canarySlider').addEventListener('input', function() {
+            document.getElementById('canaryValue').textContent = this.value;
+        });
+
+        // 应用灰度配置
+        function applyCanary() {
+            const model = document.getElementById('canaryModel').value;
+            const percentage = document.getElementById('canarySlider').value;
+            const enabled = document.getElementById('canaryEnabled').checked;
+            alert(`灰度配置已更新:\n模型: ${model}\n比例: ${percentage}%\n启用: ${enabled ? '是' : '否'}\n\n(演示环境，实际会调用中间件 API)`);
+        }
+
+        // 发送测试
+        async function sendTest() {
+            const input = document.getElementById('testInput').value;
+            const model = document.getElementById('testModel').value;
+            const resultDiv = document.getElementById('testResult');
+
+            if (!input.trim()) {
+                resultDiv.innerHTML = '<span class="text-red-500">请输入测试消息</span>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<span class="text-gray-500">正在发送请求...</span>';
+
+            try {
+                // 尝试调用中间件
+                const res = await fetch(MIDDLEWARE_URL + '/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': 'test-user-001'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: input }],
+                        stream: false
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    resultDiv.innerHTML = `
+                        <div class="space-y-2">
+                            <div><span class="font-medium text-gray-700">使用模型:</span> ${data.used_model || model}</div>
+                            <div><span class="font-medium text-gray-700">回复:</span> ${data.choices?.[0]?.message?.content || '无内容'}</div>
+                            <div><span class="font-medium text-gray-700">Token 用量:</span> Prompt: ${data.usage?.prompt_tokens || 0}, Completion: ${data.usage?.completion_tokens || 0}</div>
+                        </div>
+                    `;
+                    // 更新统计
+                    mockData.requests++;
+                    mockData.tokens += (data.usage?.total_tokens || 50);
+                    updateStats();
+                } else {
+                    throw new Error(await res.text());
+                }
+            } catch (e) {
+                // 模拟响应（演示用）
+                resultDiv.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="text-yellow-600">⚠️ 中间件未启动，显示模拟响应</div>
+                        <div><span class="font-medium text-gray-700">使用模型:</span> ${model} (模拟)</div>
+                        <div><span class="font-medium text-gray-700">回复:</span> 这是一条模拟的回复消息。启动网关中间件后将返回真实结果。</div>
+                        <div><span class="font-medium text-gray-700">Token 用量:</span> Prompt: 15, Completion: 25</div>
+                    </div>
+                `;
+            }
+        }
+
+        // 刷新数据
+        function refreshData() {
+            checkGatewayStatus();
+            // 模拟数据波动
+            mockData.requests += Math.floor(Math.random() * 20);
+            mockData.tokens += Math.floor(Math.random() * 5000);
+            updateStats();
+            renderModelTable();
+        }
+
+        // 初始化
+        initCharts();
+        updateStats();
+        renderModelTable();
+        checkGatewayStatus();
+
+        // 每 30 秒自动刷新
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# LiteLLM 模型网关 Docker Compose
+# 一键启动网关 + Redis(限流用) + 监控面板
+
+services:
+  # ============ 模型网关（核心）============
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-gateway
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - REDIS_URL=redis://redis:6379/0
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--port"
+      - "4000"
+      - "--detailed_debug"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+  # ============ Redis（限流 + 缓存）============
+  redis:
+    image: redis:7-alpine
+    container_name: litellm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+  # ============ 本地模型模拟服务（无 GPU 时演示用）============
+  # 真实部署时，用 vLLM 或 Ollama 替换这个服务
+  mock-llm:
+    image: python:3.11-slim
+    container_name: mock-llm-server
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../deployment/mock_server:/app
+    command: >
+      bash -c "pip install fastapi uvicorn pydantic python-dotenv &&
+               python -m uvicorn mock_openai:app --host 0.0.0.0 --port 8000"
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+volumes:
+  redis_data:
+
+networks:
+  gateway-net:
+    driver: bridge

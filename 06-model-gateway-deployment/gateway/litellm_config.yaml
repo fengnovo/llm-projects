@@ -1,0 +1,110 @@
+# LiteLLM Proxy 配置文件 - 模型网关
+# 文档: https://docs.litellm.ai/docs/proxy/configs
+
+model_list:
+  # ============ 云端模型 ============
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: "os.environ/OPENAI_API_KEY"
+      rpm: 60       # 每分钟请求数限制
+      tpm: 100000   # 每分钟 token 限制
+
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: "os.environ/OPENAI_API_KEY"
+      rpm: 30
+      tpm: 50000
+
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: "os.environ/DEEPSEEK_API_KEY"
+      api_base: "https://api.deepseek.com/v1"
+      rpm: 60
+      tpm: 200000
+
+  - model_name: qwen-turbo
+    litellm_params:
+      model: openai/qwen-turbo
+      api_key: "os.environ/DASHSCOPE_API_KEY"
+      api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      rpm: 60
+      tpm: 200000
+
+  # ============ 私有化部署模型（vLLM / Ollama）============
+  # 本地 vLLM 部署的 Qwen2.5-7B
+  - model_name: qwen2.5-7b-local
+    litellm_params:
+      model: openai/qwen2.5-7b-instruct
+      api_base: "http://localhost:8000/v1"   # vLLM 默认端口
+      api_key: "dummy"
+      rpm: 120
+      tpm: 500000
+
+  # 本地 Ollama 部署的模型
+  - model_name: llama3.2-3b-ollama
+    litellm_params:
+      model: ollama/llama3.2:3b
+      api_base: "http://localhost:11434"
+      rpm: 60
+      tpm: 200000
+
+  # ============ 路由别名（业务层使用，屏蔽底层模型差异）============
+  # 默认聊天模型 - 可以随时切换后端实现
+  - model_name: chat-default
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: "os.environ/OPENAI_API_KEY"
+
+  # 高质量模型（复杂任务用）
+  - model_name: chat-pro
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: "os.environ/OPENAI_API_KEY"
+
+  # 低成本模型（简单任务用）
+  - model_name: chat-lite
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: "os.environ/OPENAI_API_KEY"
+
+  # 本地私有化模型（敏感数据场景用）
+  - model_name: chat-local
+    litellm_params:
+      model: openai/qwen2.5-7b-instruct
+      api_base: "http://localhost:8000/v1"
+      api_key: "dummy"
+
+# ============ 降级与回退策略 ============
+model_aliases:
+  # 当主模型失败时，自动回退到备选模型
+  fallback_models:
+    - model_name: chat-default
+      fallbacks: ["gpt-4o-mini", "qwen-turbo", "deepseek-chat"]
+
+# ============ 限流配置 ============
+general_settings:
+  master_key: "sk-admin-gateway-key-change-me"   # 管理后台密钥
+  disable_admin_auth: false
+  # 速率限制（基于 key）
+  litellm_settings:
+    num_retries: 2               # 失败重试次数
+    request_timeout: 60          # 请求超时（秒）
+    fallbacks: []                # 默认降级列表
+    allowed_fails: 3             # 触发降级的失败次数
+    cooldown_time: 60            # 模型冷却时间（秒）
+
+# ============ 用户 / API Key 管理 ============
+user_api_key_auth: true
+api_key: "sk-gateway-demo-key-12345"   # 业务方调用网关的 key
+
+# ============ 日志与监控 ============
+litellm_callbacks:
+  - langfuse   # 可选：集成 Langfuse 做可观测性
+  - supabase   # 可选：日志存到 Supabase
+
+# ============ 预算与成本控制 ============
+budget_duration: "30d"   # 预算周期
+max_budget: 1000         # 总预算上限（美元）

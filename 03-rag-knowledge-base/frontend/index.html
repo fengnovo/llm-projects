@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 知识库问答 Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .app {
+            width: 100%;
+            max-width: 900px;
+            height: 90vh;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .header {
+            padding: 20px 24px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+            color: #fff;
+        }
+        .header h1 { font-size: 20px; margin-bottom: 4px; }
+        .header p { font-size: 13px; opacity: 0.8; }
+
+        .stats-bar {
+            padding: 12px 24px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .stats-bar .stat { display: flex; align-items: center; gap: 6px; }
+        .stats-bar .stat strong { color: #1e3a5f; font-size: 15px; }
+
+        .upload-section {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .upload-section label {
+            padding: 8px 16px;
+            background: #e2e8f0;
+            color: #475569;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .upload-section label:hover { background: #cbd5e1; }
+        .upload-section input[type="file"] { display: none; }
+        .upload-section .file-info {
+            font-size: 12px;
+            color: #64748b;
+        }
+        .upload-section button {
+            padding: 8px 16px;
+            background: #1e3a5f;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .upload-section button:hover { background: #2d5a87; }
+        .upload-section button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            background: #f8fafc;
+        }
+        .message {
+            margin-bottom: 20px;
+            max-width: 85%;
+        }
+        .message.user {
+            margin-left: auto;
+        }
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 14px;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        .message.user .message-bubble {
+            background: #1e3a5f;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .message.assistant .message-bubble {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+        .sources {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .sources-title {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .source-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #f1f5f9;
+            color: #64748b;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-right: 6px;
+            margin-bottom: 4px;
+        }
+
+        .input-area {
+            padding: 16px 24px;
+            border-top: 1px solid #e2e8f0;
+            background: #fff;
+            display: flex;
+            gap: 12px;
+        }
+        .input-area textarea {
+            flex: 1;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            resize: none;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-area textarea:focus { border-color: #1e3a5f; }
+        .input-area button {
+            padding: 0 24px;
+            background: #1e3a5f;
+            color: #fff;
+            border: none;
+            borderRadius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .input-area button:hover { background: #2d5a87; }
+        .input-area button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .empty-state {
+            text-align: center;
+            color: #94a3b8;
+            padding: 60px 20px;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state h3 { color: #64748b; margin-bottom: 8px; }
+        .empty-state p { font-size: 13px; }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 4px 0;
+        }
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #cbd5e1;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+
+        .sample-questions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .sample-q {
+            padding: 6px 12px;
+            background: #e0f2fe;
+            color: #0369a1;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .sample-q:hover { background: #bae6fd; }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <h1>📚 RAG 知识库问答</h1>
+            <p>基于 ChromaDB + LangChain 的检索增强生成系统</p>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat">
+                <span>📄 文档片段：</span>
+                <strong id="docCount">0</strong>
+            </div>
+            <div class="stat">
+                <span>📁 集合：</span>
+                <strong id="collectionName">-</strong>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <label>
+                📤 上传文档
+                <input type="file" id="fileInput" multiple accept=".txt,.md,.pdf" onchange="handleFileSelect()">
+            </label>
+            <button id="uploadBtn" onclick="uploadFiles()" disabled>上传到知识库</button>
+            <span class="file-info" id="fileInfo">支持 .txt .md .pdf 格式</span>
+            <div style="flex:1;"></div>
+            <button style="background: #dc2626;" onclick="clearKB()">清空知识库</button>
+        </div>
+
+        <div class="chat-area" id="chatArea">
+            <div class="empty-state">
+                <div class="icon">🔍</div>
+                <h3>先上传文档，再提问</h3>
+                <p>上传一些文档到知识库，然后就可以基于文档内容问答了</p>
+                <div class="sample-questions" style="justify-content:center; margin-top:20px;">
+                    <span class="sample-q" onclick="loadSampleDocs()">📥 加载示例文档</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <textarea id="questionInput" rows="1" placeholder="输入你的问题...（Enter 发送）"></textarea>
+            <button id="askBtn" onclick="askQuestion()">提问</button>
+        </div>
+    </div>
+
+    <script>
+        // 同源（页面由后端 http://localhost:8001 托管）时用相对路径，请求与页面同域，彻底避免跨域；
+        // file:// 双击打开或独立静态服务器(3001)时回退到后端绝对地址
+        const API_BASE = (location.protocol.startsWith('http') && location.port !== '3001')
+            ? ''
+            : 'http://localhost:8001';
+        let selectedFiles = [];
+        let isLoading = false;
+
+        // 初始化
+        async function init() {
+            await loadStats();
+        }
+
+        // 加载统计信息
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_BASE}/api/rag/stats`);
+                const data = await res.json();
+                document.getElementById('docCount').textContent = data.document_count;
+                document.getElementById('collectionName').textContent = data.collection_name;
+            } catch (e) {
+                console.error('加载统计失败:', e);
+            }
+        }
+
+        // 文件选择
+        function handleFileSelect() {
+            const input = document.getElementById('fileInput');
+            selectedFiles = Array.from(input.files);
+            const btn = document.getElementById('uploadBtn');
+            const info = document.getElementById('fileInfo');
+
+            if (selectedFiles.length > 0) {
+                btn.disabled = false;
+                info.textContent = `已选择 ${selectedFiles.length} 个文件`;
+            } else {
+                btn.disabled = true;
+                info.textContent = '支持 .txt .md .pdf 格式';
+            }
+        }
+
+        // 上传文件
+        async function uploadFiles() {
+            if (selectedFiles.length === 0) return;
+
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.textContent = '上传中...';
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            try {
+                const res = await fetch(`${API_BASE}/api/rag/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    selectedFiles = [];
+                    document.getElementById('fileInput').value = '';
+                    document.getElementById('fileInfo').textContent = '支持 .txt .md .pdf 格式';
+                    await loadStats();
+                } else {
+                    alert('上传失败: ' + data.detail);
+                }
+            } catch (e) {
+                alert('上传失败: ' + e.message);
+            }
+
+            btn.disabled = false;
+            btn.textContent = '上传到知识库';
+        }
+
+        // 加载示例文档（从 sample_docs 目录）
+        async function loadSampleDocs() {
+            alert('请手动上传 sample_docs 目录下的 .md 文件\n\n' +
+                  '或者直接把项目里的 sample_docs/rag-intro.md 和 langchain-intro.md 拖到上传区域');
+
+            // 提示用户
+            document.querySelector('.empty-state').innerHTML = `
+                <div class="icon">📂</div>
+                <h3>请上传示例文档</h3>
+                <p>点击上方"上传文档"，选择 sample_docs 目录下的文件</p>
+            `;
+        }
+
+        // 清空知识库
+        async function clearKB() {
+            if (!confirm('确定要清空知识库吗？此操作不可恢复。')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/rag/clear`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('知识库已清空');
+                    await loadStats();
+                }
+            } catch (e) {
+                alert('清空失败: ' + e.message);
+            }
+        }
+
+        // 提问
+        async function askQuestion() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+
+            if (!question || isLoading) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+
+            // 移除空状态
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            // 添加用户消息
+            addMessage('user', question);
+
+            // 添加加载状态
+            const loadingId = addLoadingMessage();
+            isLoading = true;
+
+            try {
+                // 流式请求
+                const response = await fetch(`${API_BASE}/api/rag/query/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+
+                if (!response.ok) throw new Error('请求失败');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let answer = '';
+                let answerEl = null;
+
+                removeLoadingMessage(loadingId);
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+
+                            if (!answerEl) {
+                                answerEl = addMessage('assistant', '');
+                            }
+
+                            answer += data;
+                            answerEl.querySelector('.message-bubble').textContent = answer;
+                            scrollToBottom();
+                        }
+                    }
+                }
+
+                // 流式结束后，获取来源（这里简化处理，实际应该从非流式接口获取）
+                // 为了演示简单，流式模式下不显示来源
+                await loadStats();
+
+            } catch (e) {
+                removeLoadingMessage(loadingId);
+                addMessage('assistant', `[出错了] ${e.message}`);
+            }
+
+            isLoading = false;
+        }
+
+        // 添加消息
+        function addMessage(role, content) {
+            const container = document.getElementById('chatArea');
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            div.innerHTML = `<div class="message-bubble">${content}</div>`;
+            container.appendChild(div);
+            scrollToBottom();
+            return div;
+        }
+
+        // 添加加载消息
+        function addLoadingMessage() {
+            const container = document.getElementById('chatArea');
+            const id = 'loading-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'message assistant';
+            div.innerHTML = `
+                <div class="message-bubble">
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeLoadingMessage(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatArea');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 输入框自适应 + 快捷键
+        document.getElementById('questionInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        document.getElementById('questionInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                askQuestion();
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 角色聊天引擎 Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .app {
+            width: 100%;
+            max-width: 900px;
+            height: 90vh;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            overflow: hidden;
+        }
+        /* 左侧边栏 - 角色选择 */
+        .sidebar {
+            width: 240px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .sidebar-header h2 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .sidebar-header p {
+            font-size: 12px;
+            color: #888;
+        }
+        .character-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .character-item {
+            padding: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .character-item:hover { background: #e9ecef; }
+        .character-item.active { background: #667eea; color: #fff; }
+        .character-avatar {
+            font-size: 28px;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            border-radius: 50%;
+        }
+        .character-item.active .character-avatar { background: rgba(255,255,255,0.2); }
+        .character-info h3 { font-size: 14px; margin-bottom: 2px; }
+        .character-info p { font-size: 11px; opacity: 0.7; }
+
+        /* 情绪状态面板 */
+        .emotion-panel {
+            padding: 15px;
+            border-top: 1px solid #e9ecef;
+            background: #fff;
+        }
+        .emotion-panel h3 {
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .emotion-bar {
+            margin-bottom: 8px;
+        }
+        .emotion-bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        .emotion-bar-track {
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .emotion-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .affection-display {
+            text-align: center;
+            padding: 10px;
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+        .affection-display .level {
+            font-size: 14px;
+            font-weight: bold;
+            color: #d63384;
+        }
+        .affection-display .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #d63384;
+        }
+
+        /* 右侧聊天区 */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .chat-header .avatar {
+            font-size: 36px;
+        }
+        .chat-header .info h2 {
+            font-size: 18px;
+            color: #333;
+        }
+        .chat-header .info p {
+            font-size: 12px;
+            color: #888;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafbfc;
+        }
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 10px;
+            max-width: 80%;
+        }
+        .message.user {
+            margin-left: auto;
+            flex-direction: row-reverse;
+        }
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .message.user .message-avatar {
+            background: #e9ecef;
+        }
+        .message-bubble {
+            padding: 10px 14px;
+            border-radius: 16px;
+            line-height: 1.5;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+        .message.assistant .message-bubble {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-top-left-radius: 4px;
+        }
+        .message.user .message-bubble {
+            background: #667eea;
+            color: #fff;
+            border-top-right-radius: 4px;
+        }
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 4px 0;
+        }
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #ccc;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+
+        /* 工具调用结果显示 */
+        .tool-result {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #0369a1;
+        }
+        .tool-result .tool-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        /* 输入区 */
+        .chat-input {
+            padding: 16px 20px;
+            border-top: 1px solid #e9ecef;
+            background: #fff;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input textarea {
+            flex: 1;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 10px 14px;
+            resize: none;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .chat-input textarea:focus {
+            border-color: #667eea;
+        }
+        .chat-input button {
+            padding: 0 24px;
+            background: #667eea;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .chat-input button:hover { background: #5568d3; }
+        .chat-input button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* 记忆提示 */
+        .memory-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 60px 20px;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state h3 { color: #666; margin-bottom: 8px; }
+        .empty-state p { font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- 左侧边栏 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>角色列表</h2>
+                <p>选择一个角色开始对话</p>
+            </div>
+            <div class="character-list" id="characterList"></div>
+            <div class="emotion-panel" id="emotionPanel" style="display:none;">
+                <h3>好感度 & 情绪</h3>
+                <div class="affection-display">
+                    <div class="level" id="affectionLevel">朋友</div>
+                    <div class="value" id="affectionValue">20</div>
+                </div>
+                <div id="emotionBars" style="margin-top: 12px;"></div>
+            </div>
+        </div>
+
+        <!-- 右侧聊天区 -->
+        <div class="chat-container">
+            <div class="chat-header" id="chatHeader" style="display:none;">
+                <div class="avatar" id="headerAvatar">👩‍🎓</div>
+                <div class="info">
+                    <h2 id="headerName">林学姐</h2>
+                    <p id="headerDesc">温柔体贴的大学学姐</p>
+                </div>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="empty-state">
+                    <div class="icon">💬</div>
+                    <h3>选择一个角色开始聊天</h3>
+                    <p>体验 AI 虚拟角色的记忆与情绪系统</p>
+                </div>
+            </div>
+            <div class="chat-input" id="chatInput" style="display:none;">
+                <textarea id="messageInput" rows="1" placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"></textarea>
+                <button id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 配置 ==========
+        const API_BASE = 'http://localhost:8000';
+        let currentCharacter = null;
+        let sessionId = null;
+        let isLoading = false;
+
+        // ========== 初始化 ==========
+        async function init() {
+            await loadCharacters();
+        }
+
+        // 加载角色列表
+        async function loadCharacters() {
+            try {
+                const res = await fetch(`${API_BASE}/api/chat/characters`);
+                const data = await res.json();
+                const list = document.getElementById('characterList');
+                list.innerHTML = data.characters.map(c => `
+                    <div class="character-item" onclick="selectCharacter('${c.id}', '${c.name}', '${c.avatar}', '${c.description}')">
+                        <div class="character-avatar">${c.avatar}</div>
+                        <div class="character-info">
+                            <h3>${c.name}</h3>
+                            <p>${c.description}</p>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                alert('无法连接到后端服务，请先启动后端服务：cd backend && python -m app.main');
+            }
+        }
+
+        // 选择角色
+        function selectCharacter(id, name, avatar, desc) {
+            currentCharacter = id;
+            // 生成一个会话ID（实际项目应该由用户系统管理）
+            sessionId = `demo_${id}_${Date.now()}`;
+
+            // 更新 UI
+            document.querySelectorAll('.character-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            document.getElementById('chatHeader').style.display = 'flex';
+            document.getElementById('chatInput').style.display = 'flex';
+            document.getElementById('emotionPanel').style.display = 'block';
+
+            document.getElementById('headerAvatar').textContent = avatar;
+            document.getElementById('headerName').textContent = name;
+            document.getElementById('headerDesc').textContent = desc;
+
+            // 清空消息
+            document.getElementById('chatMessages').innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">${avatar}</div>
+                    <h3>和${name}打个招呼吧</h3>
+                    <p>试试问她一些问题~</p>
+                </div>
+            `;
+
+            // 初始化情绪显示
+            updateEmotionPanel({
+                happiness: 50, sadness: 10, anger: 5, fear: 5, love: 30, shyness: 20, affection: 20
+            });
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message || isLoading || !currentCharacter) return;
+
+            // 清空输入
+            input.value = '';
+            input.style.height = 'auto';
+
+            // 移除空状态
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            // 添加用户消息
+            addMessage('user', message);
+
+            // 添加打字指示器
+            const typingId = addTypingIndicator();
+            isLoading = true;
+
+            try {
+                // 调用流式接口
+                const response = await fetch(`${API_BASE}/api/chat/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        character_id: currentCharacter,
+                        message: message
+                    })
+                });
+
+                if (!response.ok) throw new Error('请求失败');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantMessage = '';
+                let assistantMsgEl = null;
+
+                removeTypingIndicator(typingId);
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+
+                            if (!assistantMsgEl) {
+                                assistantMsgEl = addMessage('assistant', '');
+                            }
+
+                            assistantMessage += data;
+                            assistantMsgEl.querySelector('.message-bubble').textContent = assistantMessage;
+
+                            // 滚动到底部
+                            scrollToBottom();
+                        }
+                    }
+                }
+
+                // 消息发送完成后，获取最新的情绪状态
+                await updateEmotionState();
+
+            } catch (e) {
+                removeTypingIndicator(typingId);
+                addMessage('assistant', `[出错了] ${e.message}`);
+            }
+
+            isLoading = false;
+        }
+
+        // 添加消息
+        function addMessage(role, content) {
+            const container = document.getElementById('chatMessages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+
+            const avatar = role === 'user' ? '😊' : document.getElementById('headerAvatar').textContent;
+
+            msgDiv.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-bubble">${content}</div>
+            `;
+
+            container.appendChild(msgDiv);
+            scrollToBottom();
+            return msgDiv;
+        }
+
+        // 添加打字指示器
+        function addTypingIndicator() {
+            const container = document.getElementById('chatMessages');
+            const id = 'typing-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'message assistant';
+            div.innerHTML = `
+                <div class="message-avatar">${document.getElementById('headerAvatar').textContent}</div>
+                <div class="message-bubble">
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatMessages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 更新情绪状态
+        async function updateEmotionState() {
+            try {
+                const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`);
+                const data = await res.json();
+                if (data.emotion_state) {
+                    updateEmotionPanel(data.emotion_state);
+                }
+            } catch (e) {
+                console.error('获取情绪状态失败:', e);
+            }
+        }
+
+        // 更新情绪面板
+        function updateEmotionPanel(state) {
+            // 好感度
+            const aff = state.affection;
+            let level = '陌生人';
+            if (aff >= 80) level = '恋人';
+            else if (aff >= 60) level = '暧昧';
+            else if (aff >= 40) level = '好友';
+            else if (aff >= 20) level = '朋友';
+
+            document.getElementById('affectionLevel').textContent = level;
+            document.getElementById('affectionValue').textContent = Math.round(aff);
+
+            // 情绪条
+            const emotions = [
+                { key: 'happiness', name: '开心', color: '#fbbf24' },
+                { key: 'sadness', name: '悲伤', color: '#60a5fa' },
+                { key: 'anger', name: '生气', color: '#ef4444' },
+                { key: 'love', name: '爱慕', color: '#ec4899' },
+                { key: 'shyness', name: '害羞', color: '#a78bfa' },
+            ];
+
+            document.getElementById('emotionBars').innerHTML = emotions.map(e => `
+                <div class="emotion-bar">
+                    <div class="emotion-bar-label">
+                        <span>${e.name}</span>
+                        <span>${Math.round(state[e.key])}</span>
+                    </div>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill" style="width: ${state[e.key]}%; background: ${e.color};"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 输入框自适应高度 + 快捷键
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>
