@@ -121,6 +121,101 @@ ChromaDB 默认用余弦相似度。
 - Prompt 中明确要求"只根据参考资料回答，不知道就说不知道"
 - 可以追溯答案来源，可解释性强
 
+---
+
+## 🧱 系统架构
+
+```
+        ┌───────────────────────────────────────────┐
+        │          前端 frontend/index.html          │
+        │  上传文档 · 知识库统计 · 流式问答 · 清空    │
+        │  （默认 FastAPI 同源托管：http://host:8001/ ）│
+        └───────────────┬───────────────────────────┘
+                        │ fetch /api/rag/*
+                        ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │ FastAPI (main.py · CORS allow_origins="*" · 同源托管静态页) │
+  │                                                             │
+  │ api/rag.py                                                  │
+  │  POST  /upload        → 文件列表 → 文档处理 → 入库           │
+  │  POST  /add-text      → 直接切片入库                         │
+  │  POST  /query         → RAGEngine.query()                  │
+  │  POST  /query/stream  → SSE (data: chunk\n\n)              │
+  │  GET   /stats         → Chroma collection 统计               │
+  │  DEL   /clear         → delete_collection                   │
+  └──┬────────────────┬─────────────────────────┬───────────────┘
+     ▼                ▼                         ▼
+DocumentProcessor   RAGEngine              VectorStore
+(文档处理模块)    (问答编排引擎)          (ChromaDB封装)
+                   - SYSTEM_PROMPT            - get_vector_store()
+                   - _build_context           - similarity_search
+                   - _build_prompt            - add_documents
+                   - query / query_stream     - get_collection_stats
+                   - add_document              - delete_collection
+     │                │                         │
+     ▼                ▼                         ▼
+  PyPDF +          AsyncOpenAI            Chroma PersistentClient
+  langchain        (CHAT_MODEL ·           (embedding_function=
+  TextSplitter     temperature=0.3)         OpenAIEmbeddings ·
+  (chunk=500,                               check_embedding_ctx_length=False ·
+   overlap=50)                             chunk_size=10 ·
+     │                                     cosine相似度)
+     ▼                                        │
+ [资料 i] 来源：xxx（片段 N）                  ▼
+  +  chunk元数据                     Chroma SQLite + parquet 持久化
+     │                               路径：data/chroma/
+     ▼
+  UPLOAD_DIR 临时文件（处理完即 os.remove）
+```
+
+| 模块 | 文件 | 关键实现 |
+|---|---|---|
+| REST 接口 | `app/api/rag.py` | 上传走 `DocumentProcessor.process_file` + `vector_store.add_documents`（第 65-118 行）；流式走 `engine.query_stream` + `StreamingResponse`（第 42-62 行） |
+| 文档处理器 | `app/document_processor.py` | `load_file` 按后缀分发（`.pdf`→PyPDF；`.txt/.md`→utf8 文本）；`RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP, 中文分隔符)` |
+| RAG 引擎 | `app/rag_engine.py` | `SYSTEM_PROMPT` 明确禁止编造（第 24-37 行）；`_build_context` 标注"[资料 N] 来源+片段编号"（第 46-55 行）；`sources` 去重返回（第 114-120 行） |
+| 向量库 | `app/vectorstore.py` | `Chroma(persist_directory, embedding_function=OpenAIEmbeddings(base_url, model, check_embedding_ctx_length=False))` |
+| 配置 | `app/config.py` / `.env` | `CHUNK_SIZE / CHUNK_OVERLAP / RETRIEVE_TOP_K / EMBEDDING_MODEL / CHAT_MODEL` |
+
+---
+
+## 🔄 核心流程：上传文档 + 流式问答
+
+```mermaid
+flowchart TB
+    %% --- 上传链路 ---
+    subgraph UPLOAD["一、文档上传入库 (POST /api/rag/upload)"]
+        U1[用户选取 .txt/.md/.pdf<br/>multipart form-data 提交] --> U2[每个文件 uuid 命名写入 data/uploads 临时]
+        U2 --> U3[DocumentProcessor.process_file(path, filename)<br/>· 按扩展名选择 loader<br/>· RecursiveCharacterTextSplitter 切分 → chunks]
+        U3 --> U4[每个 chunk 构造 metadata<br/>{source: filename, chunk_index, page?}]
+        U4 --> U5[VectorStore.add_documents(texts, metas, ids=fileid_idx)]
+        U5 --> U6[OpenAIEmbeddings.embed_documents → Chroma upsert]
+        U6 --> U7[os.remove(临时文件) · 聚合 uploaded_files + total_chunks]
+        U7 --> U8[返回 success + collection_stats.document_count]
+    end
+
+    %% --- 问答链路 ---
+    subgraph QUERY["二、流式 RAG 问答 (POST /api/rag/query/stream)"]
+        Q1[前端 POST JSON {question, k?}] --> Q2[RAGEngine.query_stream]
+        Q2 --> Q3[vector_store.similarity_search(question, k=RETRIEVE_TOP_K)]
+        Q3 --> Q4{检索到 docs?}
+        Q4 -- 否 --> Q5[yield "知识库中没有找到相关内容" 结束]
+        Q4 -- 是 --> Q6[_build_prompt<br/>SYSTEM_PROMPT +<br/>[资料 N]来源+片段 + 问题]
+        Q6 --> Q7[client.chat.completions.create<br/>stream=True, temperature=0.3, max_tokens=1000]
+        Q7 --> Q8[逐 chunk：delta.content 不为空则 yield]
+        Q8 --> Q9[SSE 包装："data: chunk\n\n" 追加<br/>最终 yield "data: [DONE]\n\n"]
+    end
+
+    UPLOAD -- 用户文档入库形成可检索知识库 --> QUERY
+```
+
+**代码锚点与关键约定：**
+- 上传接口入口 [rag.py:65-118](file:///Users/keen/Downloads/llm-projects-pack/03-rag-knowledge-base/backend/app/api/rag.py#L65-L118)：`file_id = uuid4()` + `os.remove(file_path)`（第 82/106 行），保证临时目录不堆积；返回体中 `success` 为 True、`message` 为"成功上传 N 个文件，共 M 个片段"（第 112 行）。
+- 切片策略在 [document_processor.py:20-28](file:///Users/keen/Downloads/llm-projects-pack/03-rag-knowledge-base/backend/app/document_processor.py#L20-L28)：`separators` 显式加入中文标点 `。！？`，避免中英文混排的切分点错位。
+- 检索与 Prompt 构造对应 [rag_engine.py:75-126](file:///Users/keen/Downloads/llm-projects-pack/03-rag-knowledge-base/backend/app/rag_engine.py#L75-L126)（非流式）/ [128-159](file:///Users/keen/Downloads/llm-projects-pack/03-rag-knowledge-base/backend/app/rag_engine.py#L128-L159)（流式），两条链路共用同一套 `_build_prompt → _build_context` 模板，保证回答一致性。
+- 同源托管：[main.py:35-39](file:///Users/keen/Downloads/llm-projects-pack/03-rag-knowledge-base/backend/app/main.py#L35-L39) 挂载 `frontend/` 为静态根，访问 `http://host:8001/` 即可得到页面 + API 同域，消除跨域（前端 API_BASE 自适应，[index.html:266-270](file:///Users/keen/Downloads/llm-projects-pack/03-rag-knowledge-base/frontend/index.html#L266-L270)）。
+
+---
+
 ## 可以优化的方向
 
 ### 1. 检索质量优化

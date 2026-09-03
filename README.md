@@ -28,13 +28,15 @@ class Config:
 
 ## 项目清单汇总
 
-| # | 项目名称 | 技术栈 | 核心能力 |
-|---|----------|--------|---------|
-| 1 | [AI 聊天助手](./01-ai-chat-assistant) | Next.js + TypeScript + Vercel AI SDK | LLM 调用、流式输出 |
-| 2 | [AI 角色聊天引擎](./02-ai-character-engine) | FastAPI + LangChain + SQLite + Redis | 人设、记忆、情绪、Function Calling |
-| 3 | [RAG 知识库问答](./03-rag-engine) | FastAPI + LangChain + ChromaDB | RAG 全流程、向量检索 |
-| 4 | [Agent 任务助手](./04-agent-engine) | FastAPI + LangGraph | ReAct 模式、多工具调用、Agent 编排 |      
-| 5 | [多模态内容推荐](./05-multimodal-engine) | FastAPI + CLIP + Qdrant | 图文检索、多模态 RAG |
-| 6 | [模型网关与部署](./06-model-gateway-deployment) | LiteLLM + vLLM/Ollama + Redis | 模型抽象、限流降级灰度、私有化部署 |
+> 每个项目的 README 都已补齐「🧱 系统架构」与「🔄 核心流程图」章节（Mermaid 图，GitHub/Typora/VSCode 预览原生支持），点击「架构 / 流程」可直达。
+
+| # | 项目名称 | 技术栈 | 核心能力 | 架构图 | 流程图 |
+|---|----------|--------|---------|---|---|
+| 1 | [AI 聊天助手](./01-ai-chat-assistant) | Next.js + TypeScript + Vercel AI SDK | LLM 调用、流式输出 | [直达](./01-ai-chat-assistant/README.md#🧱-系统架构) | [直达](./01-ai-chat-assistant/README.md#🔄-核心流程一次流式对话) |
+| 2 | [AI 角色聊天引擎](./02-ai-character-engine) | FastAPI + SQLAlchemy + SQLite + AsyncOpenAI | 人设、双层记忆、情绪状态机、Function Calling | [直达](./02-ai-character-engine/README.md#🧱-系统架构) | [直达](./02-ai-character-engine/README.md#🔄-核心流程一次非流式对话--function-calling) |
+| 3 | [RAG 知识库问答](./03-rag-knowledge-base) | FastAPI + LangChain + ChromaDB + OpenAI Embeddings | 文档切片入库、向量检索、流式 RAG、引用溯源 | [直达](./03-rag-knowledge-base/README.md#🧱-系统架构) | [直达](./03-rag-knowledge-base/README.md#🔄-核心流程上传文档--流式问答) |
+| 4 | [Agent 任务助手](./04-agent-task-assistant) | FastAPI + LangGraph + ChatOpenAI.bind_tools | ReAct 推理、5 个内置工具、循环编排、死循环保护 | [直达](./04-agent-task-assistant/README.md#🧱-系统架构) | [直达](./04-agent-task-assistant/README.md#🔄-核心流程langgraph-react-迭代) |
+| 5 | [多模态内容推荐](./05-multimodal-rag) | FastAPI + CLIP(SentenceTransformer) + Qdrant | 批量入图、文本搜图、以图搜图、RRF混合、对话推荐 | [直达](./05-multimodal-rag/README.md#🧱-系统架构) | [直达](./05-multimodal-rag/README.md#🔄-核心流程图片入库--三种检索) |
+| 6 | [模型网关与部署](./06-model-gateway-deployment) | LiteLLM Proxy + vLLM/Ollama + Redis + FastAPI中间件 | 模型别名抽象、多级限流、灰度切流、降级链、成本统计、私有化部署 | [直达](./06-model-gateway-deployment/README.md#🧱-分层架构详细拆解) | [直达](./06-model-gateway-deployment/README.md#🔄-核心流程请求过网关--限流--灰度--降级--返回) |
 
 ---

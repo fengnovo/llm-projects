@@ -35,6 +35,105 @@
     └────────┘ └─────────┘ └────────┘ └──────────────┘
 ```
 
+---
+
+## 🧱 分层架构详细拆解
+
+```
+                                  上游 LLM 费用/模型监控
+                                         │
+┌────────────────────────────────────────┼──────────────────────────────────────┐
+│ L4 业务应用层                           │  client_example.py / stress_test.py  │
+│  项目01~05 / 任何支持 OpenAI API 的 App │  cost_calculator.py                 │
+└─────────────────────┬──────────────────┴──────────────────────────────────────┘
+                      │ 调用 Chat Completions / Embeddings（统一 OpenAI 协议）
+                      ▼
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ L3 网关中间件 (middleware/gateway_middleware.py · FastAPI + Redis)             │
+│  RATE_LIMITS: default/premium → qps/rpm/tpm/daily_tokens (多级限流 滑动窗口)  │
+│  FALLBACK_CHAIN: chat-default → [gpt-4o-mini → qwen-turbo → deepseek → local] │
+│  CANARY_CONFIG: chat-default → new=gpt-4o, %=20, 白/黑名单 用户              │
+│  入口：httpx → FORWARD → GATEWAY_URL, Redis 不可用时降级为只透传              │
+└─────────────────────────────┬─────────────────────────────────────────────────┘
+                              │ chat/completions, embeddings...
+                              ▼
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ L2 模型网关 LiteLLM Proxy (gateway/litellm_config.yaml + docker-compose.yml)  │
+│  model_list: 云端 gpt-4o-mini/gpt-4o/deepseek-chat/qwen-turbo                │
+│              私有化 qwen2.5-7b-local / llama3.2-3b-ollama                     │
+│              路由别名 chat-default/chat-pro/chat-lite/chat-local              │
+│  内建: 降级回退策略 / rpm & tpm 限速 / 密钥管理 / 后台 UI / Prometheus 指标    │
+│  管理后台:  :4000/ui   API 文档: :4000/docs                                   │
+└───────┬───────────┬───────────────┬──────────────┬─────────────────────────────┘
+        ▼           ▼               ▼              ▼
+┌──────────────┐ ┌──────────┐ ┌─────────────┐ ┌────────────────────────────────┐
+│ L1 云端 API   │ │ DeepSeek │ │  DashScope  │ │ L1 私有化部署                   │
+│  GPT-4o/mini  │ │  通义     │ │  阿里云     │ │ deployment/                    │
+│  OpenAI 协议  │ │          │ │ 兼容模式     │ │  · vLLM/deploy_vllm.sh         │
+│  sk-xxx       │ │          │ │              │ │    (8000/v1 · 连续批处理)      │
+└──────────────┘ └──────────┘ └─────────────┘ │  · Ollama/deploy_ollama.sh      │
+        ▲                                       │ │    (11434 · CPU/Mac 可用)     │
+        │ 开发演示用:                           │ │  · mock_server/mock_openai.py │
+        │ deployment/mock_server/:8000          │ │    (无 GPU 时 Mock "流式"响应)│
+        └───────────────────────────────────────┘ └────────────────────────────────┘
+                                    ▲
+                                    │ 监控面板: monitoring/frontend/index.html
+                                    │  读取 LiteLLM UI 指标 / middleware 统计
+```
+
+| 层级 | 关键文件 | 职责 & 代码锚点 |
+|---|---|---|
+| L4 业务客户端 | `examples/client_example.py` / 01~05 项目 | 通过 `base_url = "http://middleware:5000"` 或 `"http://litellm:4000"` 调用；只认 model 别名，不知道底层模型 |
+| L3 中间件 | `middleware/gateway_middleware.py:41-72` | `RATE_LIMITS`（第 41-54 行）/ `FALLBACK_CHAIN`（第 57-61 行）/ `CANARY_CONFIG`（第 64-71 行）；`lifespan` 里初始化 `redis.from_url()`，连不上降级（第 81-90 行） |
+| L2 LiteLLM Proxy | `gateway/litellm_config.yaml:4-112` | 每个 entry 声明 `model_name` + `litellm_params`；提供 `chat-default` 等别名屏蔽底层差异；配置 `rpm/tpm` 防止打爆上游 |
+| L1 云端推理 | `.env` 注入 API Key | `os.environ/OPENAI_API_KEY` / `DEEPSEEK_API_KEY` / `DASHSCOPE_API_KEY` — LiteLLM 用字符串引用自动读取 |
+| L1 私有化部署 | `deployment/{vllm,ollama,mock_server}/` | vLLM 提供 `http://localhost:8000/v1`（OpenAI 格式），Ollama 提供 `http://localhost:11434`，Mock 用 FastAPI 伪造增量流 |
+
+---
+
+## 🔄 核心流程：请求过网关 → 限流 → 灰度 → 降级 → 返回
+
+```mermaid
+sequenceDiagram
+    participant App as 业务应用<br/>(项目 01~05)
+    participant M as gateway_middleware.py<br/>:5000
+    participant R as Redis (滑窗/限流计数)
+    participant P as LiteLLM Proxy<br/>:4000
+    participant L as L1 推理提供者<br/>(云端 / vLLM / Ollama / Mock)
+
+    App->>M: POST /v1/chat/completions<br/>X-User-Id + Authorization(网关key)
+    M->>R: 按 user_id 读取 qps/rpm/tpm/daily_tokens 计数
+    R-->>M: 当前计数 + 上限
+    alt 超限 (qps/rpm/tpm/daily_tokens 任何一个超)
+        M-->>App: 429 Too Many Requests { error: rate limit }
+    end
+
+    M->>M: 灰度路由决策 (CANARY_CONFIG)<br/>· 白名单 → 新模型<br/>· 黑名单 → 旧模型<br/>· 其余 → 按 percentage 选
+    loop FALLBACK_CHAIN 依次尝试
+        M->>P: 转发到 chat-default / chat-pro ...
+        P->>L: 调用底层模型 (rpm/tpm 再校验)
+        alt 失败（5xx / 超时 / 429）
+            L-->>P: 错误
+            P-->>M: 错误响应
+            Note over M: 切换下一个候选模型<br/>gpt-4o-mini → qwen → deepseek → chat-local
+        else 成功
+            L-->>P: chunks / 完整 JSON
+            P-->>M: OpenAI 格式响应
+            M->>R: INCR tpm/daily_tokens 累计
+            M-->>App: 200 OK（流式 chunked / 完整 body）
+            break
+        end
+    end
+    Note over M,App: 若全部降级都失败，返回 503 说明所有提供者不可用
+```
+
+**关键配置&行为证据：**
+- 中间件配置中心 `RATE_LIMITS["default"] = {qps:10, rpm:300, tpm:100_000, daily_tokens:1_000_000}`，`premium` 账号 ×5（[middleware.py:41-54](file:///Users/keen/Downloads/llm-projects-pack/06-model-gateway-deployment/middleware/gateway_middleware.py#L41-L54)）。
+- 降级链 `FALLBACK_CHAIN["chat-default"] = ["gpt-4o-mini", "qwen-turbo", "deepseek-chat", "chat-local"]`，即云端挂了自动切本地私有化模型（[第 58 行](file:///Users/keen/Downloads/llm-projects-pack/06-model-gateway-deployment/middleware/gateway_middleware.py#L58)）。
+- LiteLLM 的模型别名 `chat-default` 与底层模型解耦：只改 `litellm_config.yaml` 就能替换实现，业务代码**一行不改**（[gateway/litellm_config.yaml:56-60](file:///Users/keen/Downloads/llm-projects-pack/06-model-gateway-deployment/gateway/litellm_config.yaml#L56-L60)）。
+
+---
+
 ## 📁 项目结构
 
 ```

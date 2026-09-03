@@ -180,6 +180,95 @@ API 文档：http://localhost:8000/docs
   ↓
 返回结果
 ```
+
+---
+
+## 🧱 系统架构
+
+```
+          ┌──────────────────────────────────────────────┐
+          │               前端 frontend/index.html        │
+          │  选角色 · 消息气泡 · 情绪/好感度仪表盘         │
+          └────────────────────┬─────────────────────────┘
+                               │ JSON / SSE
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  FastAPI (app/main.py · CORS · lifespan=init_db)                │
+│                                                                 │
+│  ┌─────────────────┐  ┌─────────────────────────────────────┐   │
+│  │ api/chat.py     │  │ api/sessions.py                     │   │
+│  │ /chat           │  │ /sessions CRUD · EmotionState查询    │   │
+│  │ /chat/stream    │  └──────────────┬──────────────────────┘   │
+│  │ /characters     │                 │                          │
+│  └────────┬────────┘                 │                          │
+│           │                          │ SQLAlchemy AsyncSession   │
+│           ▼                          ▼                          │
+│  ┌──────────────────────────────────────────┐                   │
+│  │     ChatEngine (character/engine.py)      │                   │
+│  └───┬──────┬───────┬────────┬──────────────┘                   │
+│      │      │       │        │                                  │
+│      ▼      ▼       ▼        ▼                                  │
+│  persona   memory  emotion  tools.py                            │
+│  (角色)    (双层)  (状态机)  FunctionCalling                    │
+└──────┬──────┬───────┬────────┬──────────────────────────────────┘
+       │      │       │        │
+       ▼      ▼       ▼        ▼
+   characters  messages  emotion_state  long_term_memories
+   (静态字典)  (会话消息)  (6维情绪+好感)    (事件簿总结)
+       │      │       │        │
+       └──────┴───────┴────────┴──────── SQLAlchemy → SQLite
+                                              (可替换 MySQL/PG)
+                                            │
+                                            ▼
+                               ┌──────────────────────────┐
+                               │  AsyncOpenAI (兼容Chat API)│
+                               │  CHAT_MODEL · temperature  │
+                               └──────────────────────────┘
+```
+
+| 模块 | 文件 | 关键常量/接口 |
+|---|---|---|
+| REST 入口 | `app/api/chat.py` | `POST /api/chat`、`POST /api/chat/stream`（SSE）、`GET /api/chat/characters`（列出 `senior_sister`、`tsundere`） |
+| 对话引擎 | `app/character/engine.py` | `ChatEngine.chat()` 非流式 + 工具调用；`chat_stream()` 流式（SSE `data: chunk\n\n`） |
+| 人设 | `app/character/persona.py` | `CHARACTERS` 字典，每个含 `system_prompt`、`initial_emotions` |
+| 记忆 | `app/character/memory.py` | `MemorySystem`：滑动窗口(`SHORT_TERM_MEMORY_WINDOW`) + 每 N 轮触发总结(`LONG_TERM_SUMMARY_INTERVAL`) |
+| 情绪 | `app/character/emotion.py` | `EmotionStateMachine.update(delta)`：`happiness/sadness/anger/fear/love/shyness/affection` 0-100 剪裁 |
+| 工具 | `app/character/tools.py` | `TOOL_DEFINITIONS`（JSON Schema）+ `execute_tool(name, args)`，当前实现 `unlock_gallery`、`get_weather` |
+| 持久化 | `app/models.py` | 4 张表：`conversations(session_id, character_id, message_count)`、`messages(role, content, metadata_)`、`emotion_state`（7 维）、`long_term_memories` |
+
+---
+
+## 🔄 核心流程：一次非流式对话 + Function Calling
+
+```mermaid
+flowchart TD
+    U[用户 POST /api/chat<br/>session_id + character_id + message] --> E[ChatEngine._ensure_conversation<br/>不存在则初始化 Conversation + EmotionState]
+    E --> SM[_save_message("user", ...) → 写入 messages 表<br/>Conversation.message_count++]
+    SM --> AE[analyze_emotion_from_text(user_text) → EmotionUpdate<br/>关键词规则，可替换为LLM]
+    AE --> UE[_update_emotion_state → EmotionStateMachine 更新并commit]
+    UE --> GE[_get_emotion_state 读当前7维值]
+    GE --> GSM[memory.get_short_term_memory 最近 N 轮对话]
+    GSM --> SP[_build_system_prompt =<br/>persona.system_prompt +<br/>generate_emotion_prompt(...) +<br/>memory.build_memory_prompt(...)]
+    SP --> L1[第1次调用 LLM<br/>带 TOOL_DEFINITIONS + tool_choice=auto]
+    L1 --> TC{模型返回 tool_calls?}
+    TC -- 否 --> REPLY[直接返回 assistant.content]
+    TC -- 是 --> EXEC[遍历 tool_calls：json.loads 参数 →<br/>execute_tool(name, args)]
+    EXEC --> APPEND[消息列表追加：<br/>1) AIMessage(tool_calls) 2) ToolMessage(result)]
+    APPEND --> L2[第2次调用 LLM 基于工具结果再生成]
+    L2 --> REPLY
+    REPLY --> SM2[_save_message("assistant", reply, metadata=tool_calls)]
+    SM2 --> MS[memory.maybe_summarize()<br/>message_count % SUMMARY_INTERVAL==0 → LLM总结事件簿]
+    MS --> GE2[_get_emotion_state 最终快照]
+    GE2 --> OUT[返回 ChatResponse<br/>reply/emotion_state/tool_calls/memory_summarized]
+```
+
+**流程证据（代码锚点）：**
+- 入口在 [engine.py:171-217](file:///Users/keen/Downloads/llm-projects-pack/02-ai-character-engine/backend/app/character/engine.py#L171-L217)，顺序为 `_ensure_conversation → save_message → analyze_emotion → update_emotion_state → build_system_prompt → _call_llm_with_tools → save_message → maybe_summarize`。
+- 两次调用 LLM + 工具注入的子流程在 [engine.py:266-327](file:///Users/keen/Downloads/llm-projects-pack/02-ai-character-engine/backend/app/character/engine.py#L266-L327)，符合 README 里的"1. 首调用 2. 执行工具 3. 二次调用"三段式描述。
+- 流式变体 [engine.py:219-264](file:///Users/keen/Downloads/llm-projects-pack/02-ai-character-engine/backend/app/character/engine.py#L219-L264) 简化了工具调用，纯 SSE 推送 `chunk.choices[0].delta.content`，在 [chat.py:52-76](file:///Users/keen/Downloads/llm-projects-pack/02-ai-character-engine/backend/app/api/chat.py#L52-L76) 包装成 `text/event-stream` + `data: ...\n\ndata: [DONE]\n\n`。
+
+---
+
 ### 1. 为什么用 FastAPI？
 - 异步性能好，适合 I/O 密集的 AI 服务
 - 自动生成 API 文档（Swagger UI）
