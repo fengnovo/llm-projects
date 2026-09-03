@@ -172,8 +172,6 @@ ChromaDB 默认用余弦相似度。
     └── langchain-intro.md
 ```
 
-## 对应岗位要求
-
 - ✅ RAG 熟练工
 - ✅ 向量数据库（ChromaDB 入门，可迁移到 Milvus/Qdrant）
 - ✅ Embedding 原理

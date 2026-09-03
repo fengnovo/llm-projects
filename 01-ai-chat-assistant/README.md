@@ -74,8 +74,6 @@ npm run dev
 4. **消息复制 / 重生成**：单条消息的操作
 5. **导出对话**：导出为 Markdown 或 JSON 文件
 
-## 对应岗位要求
-
 - ✅ LLM 应用开发基础
 - ✅ Prompt 工程（可以通过扩展 System Prompt 来练习）
 - ✅ Context 窗口理解
