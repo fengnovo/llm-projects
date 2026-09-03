@@ -30,11 +30,11 @@ class Config:
 
 | # | 项目名称 | 技术栈 | 核心能力 |
 |---|----------|--------|---------|
-| 1 | [AI 聊天助手](./01-ai-chat) | Next.js + TypeScript + Vercel AI SDK | LLM 调用、流式输出 |
-| 2 | [AI 角色聊天引擎](./02-role-chat) | FastAPI + LangChain + SQLite + Redis | 人设、记忆、情绪、Function Calling |
-| 3 | [RAG 知识库问答](./03-rag) | FastAPI + LangChain + ChromaDB | RAG 全流程、向量检索 |
-| 4 | [Agent 任务助手](./04-agent) | FastAPI + LangGraph | ReAct 模式、多工具调用、Agent 编排 |
-| 5 | [多模态内容推荐](./05-multimodal) | FastAPI + CLIP + Qdrant | 图文检索、多模态 RAG |
-| 6 | [模型网关与部署](./06-model) | LiteLLM + vLLM/Ollama + Redis | 模型抽象、限流降级灰度、私有化部署 |
+| 1 | [AI 聊天助手](./01-ai-chat-assistant) | Next.js + TypeScript + Vercel AI SDK | LLM 调用、流式输出 |
+| 2 | [AI 角色聊天引擎](./02-ai-character-engine) | FastAPI + LangChain + SQLite + Redis | 人设、记忆、情绪、Function Calling |
+| 3 | [RAG 知识库问答](./03-rag-engine) | FastAPI + LangChain + ChromaDB | RAG 全流程、向量检索 |
+| 4 | [Agent 任务助手](./04-agent-engine) | FastAPI + LangGraph | ReAct 模式、多工具调用、Agent 编排 |      
+| 5 | [多模态内容推荐](./05-multimodal-engine) | FastAPI + CLIP + Qdrant | 图文检索、多模态 RAG |
+| 6 | [模型网关与部署](./06-model-gateway-deployment) | LiteLLM + vLLM/Ollama + Redis | 模型抽象、限流降级灰度、私有化部署 |
 
 ---
